@@ -1,8 +1,11 @@
 ---
-title: "Assignment 1"
-author: "Your Name"
+title: Assignment 1 MikeAbr Ver 2 
 format: html
+editor: visual
 ---
+## Assignment 1
+
+In this assignment I will be using data from the V-Dem and World Bank Data sets in order to compile and do a basic analysis
 
 **Overview:** *For this assignment, you are going to download some variables using the `wbstats` and `vdemdata` packages. Then you are going to wrangle these data and merge the two data sets into one and analyze how they relate to women's representation in national parliaments. Do your work for each step in the code chunks provided. Be sure to label your code chunks.* 
 
@@ -15,7 +18,36 @@ format: html
 *Make sure to load the packages that you need and `glimpse()` the data or `View()` it to make sure that it downloaded properly.* 
 
 ```{r}
+#| label: v-dem
+ 
+#Load packages
+library(vdemdata)
 
+
+#download the data
+freedom <- vdem|>
+  filter(year >= 2003) |>
+  select(
+    country = country_name,
+    vdem_ctry_id = country_id,
+    year, 
+    Access_to_justice_for_women  = v2clacjstw, 
+    Freedom_of_discussion_for_women = v2cldiscw,
+    region = e_regionpol_6C
+  )|>
+  mutate(
+    region = case_match(region,
+                        1 ~ "Eastern Europe", 
+                        2 ~ "Latin American",
+                        3 ~  "Middle East",
+                        4 ~ "Africa",
+                        5 ~ "The West",
+                        6 ~ "Asia")
+  )
+
+
+#view the data 
+glimpse(freedom)
 ```
 
 ## Step 2: Download data from the World Bank
@@ -26,6 +58,24 @@ format: html
 
 ```{r}
 
+library(wbstats)
+library(dplyr)
+library(janitor)
+
+indicators <- c("FEA" = "SE.TER.CUAT.BA.FE.ZS", "women_rep" = "SG.GEN.PARL.ZS") 
+
+# Download the data  
+women_emp <- wb_data(indicators, mrv = 20) |>
+  select(!iso2c) |> 
+  rename(year = date) |> 
+  mutate(
+    FEA = round_to_fraction(FEA, denominator = 100), 
+    women_rep = round_to_fraction(women_rep, denominator = 100) 
+  )
+
+# View the data
+glimpse(women_emp) 
+
 ```
 
 ## Step 3: Merge the data
@@ -33,15 +83,54 @@ format: html
 *Now add country codes using the `countrycode` package and merge the data using `left_join()`.* 
 
 ```{r}
+#| Label : join 
+# Load: readr 
+library(readr)
 
+#Perform left join using the iso3c variable 
+free_women <- left_join(freedom, women_emp, by = c("iso3c", "year"))|>
+  rename(country = country.x)|> #rename country.x 
+  select(!country.y)              #crop country.y
+
+#save as .csv for future use 
+write.csv(free_women,"data/dem_women.csv")
+
+#view the data 
+glimpse(free_women)
 ```
 
 ## Step 4: Summarize your combined data set
 
 *Use `group_by()`, `summarize()` and `arrange()` to glean insights about your data. For example, how do regions compare on mean values of women's representation and how do these values relate to the values of other variables in your data set? Which countries stand out in terms of women's representation? Etc.* 
 
+```{r}
+#| label group_by Sammarize and Arrange
+# group, summarize, arrange 
+
+free_summary <- free_women |> 
+  group_by(country)  |> 
+  summarize(           
+    Access_to_justice_for_women = mean(Access_to_justice_for_women, na.rm = TRUE), 
+    Freedom_of_discussion_for_women = mean(Freedom_of_discussion_for_women, na.rm = TRUE), 
+    women_rep = mean(women_rep, na.rm = TRUE)
+  ) |> 
+  arrange(desc(Access_to_justice_for_women)) 
+
+# Save as .csv for future use
+write_csv(free_summary, "data/free_summary.csv")
+
+# View the data
+glimpse(free_summary)
+
+```
 
 ## Step 5: Interpret your data
 
 *Write a paragraph or so relating your insights to the Norris reading about electoral reform and women's representation. Picking a handful of country cases from your data, how does your analysis relate to her arguments about the relevance of electoral systems, statutory quotas, reserved seats or voluntary quotas?* 
+## Paragraph Interprating the data.
 
+When looking at our top nations when ranked by Access to Justice for women Germany, Sweden and Australia are discussed in the Norris article. There are high levels of female representation on parliament and other government positions. In addition, we also see high levels for freedom of discussion. While our lower nations have negative values in the two positions our top nations are achieve closer to maximum values. What is also interesting is that the quotas and reserved seats like New Zealand do not make this list. The data I compiled perhaps takes more note of the overall tradition of representations going beyond what is legally binding. The question of freedom of discussion is not as legally enforceable as mandatory quotas. What is legally binding however is access to justice for women. The Justice systems on the top list, and in opposition those on the lowest end reflect the justice system of the nation overall.  
+
+## Paragraph Interprating the data.
+
+When looking at our top nations when ranked by Access to Justice for women Germany, Sweden and Australia are discussed in the Norris article. There are high levels of female representation on parliament and other government positions. In addition, we also see high levels for freedom of discussion. While our lower nations have negative values in the two positions our top nations are achieve closer to maximum values. What is also interesting is that the quotas and reserved seats like New Zealand do not make this list. The data I compiled perhaps takes more note of the overall tradition of representations going beyond what is legally binding. The question of freedom of discussion is not as legally enforceable as mandatory quotas. What is legally binding however is access to justice for women. The Justice systems on the top list, and in opposition those on the lowest end reflect the justice system of the nation overall.  
