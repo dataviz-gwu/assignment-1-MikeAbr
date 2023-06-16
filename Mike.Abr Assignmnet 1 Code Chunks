@@ -1,0 +1,130 @@
+---
+title: "Assignment 1 MikeAbr"
+format: html
+editor: visual
+---
+
+## Assignment #1 
+
+In this assignment I will be using data from the V-Dem and World Bank Data sets in order to compile and do a basic analysis.
+
+```{r}
+
+
+library(wbstats)
+library(dplyr)
+library(janitor)
+
+indicators <- c("FEA" = "SE.TER.CUAT.BA.FE.ZS", "women_rep" = "SG.GEN.PARL.ZS") 
+
+# Download the data  
+women_emp <- wb_data(indicators, mrv = 20) |>
+  select(!iso2c) |> 
+  rename(year = date) |> 
+  mutate(
+    FEA = round_to_fraction(FEA, denominator = 100), 
+    women_rep = round_to_fraction(women_rep, denominator = 100) 
+  )
+
+# View the data
+glimpse(women_emp) 
+
+```
+
+## Filter Observations, Selection and creattion of new variables
+
+```{r}
+#| label: v-dem
+ 
+#Load packages
+library(vdemdata)
+
+
+#download the data
+freedom <- vdem|>
+  filter(year >= 2003) |>
+  select(
+    country = country_name,
+    vdem_ctry_id = country_id,
+    year, 
+    Access_to_justice_for_women  = v2clacjstw, 
+    Freedom_of_discussion_for_women = v2cldiscw,
+    region = e_regionpol_6C
+  )|>
+  mutate(
+    region = case_match(region,
+                        1 ~ "Eastern Europe", 
+                        2 ~ "Latin American",
+                        3 ~  "Middle East",
+                        4 ~ "Africa",
+                        5 ~ "The West",
+                        6 ~ "Asia")
+  )
+
+
+#view the data 
+glimpse(freedom)
+```
+
+## Add country Codes to a data frame
+
+```{r}
+#| label: country_codes
+library(countrycode)
+
+freedom <- freedom |>
+  mutate(iso3c = countrycode(
+    sourcevar = vdem_ctry_id,
+    origin = "vdem",
+    destination = "wb", 
+  )) |>
+  
+relocate (iso3c, .after = vdem_ctry_id)
+
+# View the data 
+glimpse(freedom)
+
+```
+
+## merge two data sets
+
+```{r}
+#| Label : join 
+# Load: readr 
+library(readr)
+
+#Perform left join using the iso3c variable 
+free_women <- left_join(freedom, women_emp, by = c("iso3c", "year"))|>
+  rename(country = country.x)|> #rename country.x 
+  select(!country.y)              #crop country.y
+
+#save as .csv for future use 
+write.csv(free_women,"data/dem_women.csv")
+
+#view the data 
+glimpse(free_women)
+
+```
+
+## Group Summarize and arrange
+
+```{r}
+#| label group_by Sammarize and Arrange
+# group, summarize, arrange 
+
+free_summary <- free_women |> 
+  group_by(country)  |> 
+  summarize(           
+    Access_to_justice_for_women = mean(Access_to_justice_for_women, na.rm = TRUE), 
+    Freedom_of_discussion_for_women = mean(Freedom_of_discussion_for_women, na.rm = TRUE), 
+    women_rep = mean(women_rep, na.rm = TRUE)
+  ) |> 
+  arrange(desc(Access_to_justice_for_women)) 
+
+# Save as .csv for future use
+write_csv(free_summary, "data/free_summary.csv")
+
+# View the data
+glimpse(free_summary)
+
+```
